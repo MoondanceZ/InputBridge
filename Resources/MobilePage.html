@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>InputBridge</title>
+    <style>
+        :root {
+            --app-height: 100dvh;
+            --bg: #f5f7f8;
+            --panel: #ffffff;
+            --ink: #172033;
+            --muted: #6c7480;
+            --line: #d9e0e7;
+            --accent: #1769e0;
+            --accent-ink: #0f4fa8;
+            --danger: #c7352d;
+            --ok: #15995f;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { background: var(--bg); height: var(--app-height); }
+        body {
+            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(180deg, #fbfcfd 0%, var(--bg) 36%, #eef2f5 100%);
+            color: var(--ink);
+            height: var(--app-height);
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto auto auto 1fr;
+            overflow: hidden;
+        }
+        button, input, textarea { font: inherit; }
+        button { -webkit-tap-highlight-color: transparent; }
+        .top {
+            padding: 12px 12px 8px;
+            border-bottom: 1px solid rgba(217,224,231,.75);
+            background: rgba(255,255,255,.88);
+            backdrop-filter: blur(16px);
+            z-index: 5;
+        }
+        .nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: #172033;
+            position: relative;
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,.14);
+            flex: 0 0 auto;
+        }
+        .mark::before {
+            content: "";
+            position: absolute;
+            left: 13px;
+            top: 7px;
+            width: 10px;
+            height: 17px;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .mark::after {
+            content: "";
+            position: absolute;
+            left: 9px;
+            top: 16px;
+            width: 18px;
+            height: 10px;
+            border: 2px solid #7fd6a9;
+            border-top: 0;
+            border-radius: 0 0 12px 12px;
+        }
+        .title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .title strong { font-size: 15px; line-height: 1.1; font-weight: 800; color: var(--ink); }
+        .status-box { display: flex; align-items: center; gap: 7px; min-width: 0; }
+        .status-dot { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; flex: 0 0 auto; }
+        .status-dot.on { background: var(--ok); box-shadow: 0 0 0 4px rgba(21,153,95,.12); }
+        .status-text { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+        .set-btn {
+            height: 34px;
+            padding: 0 14px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: #3b4655;
+            font-size: 14px;
+            font-weight: 800;
+            flex: 0 0 auto;
+        }
+        .status-strip {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+            padding: 9px 10px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .paper {
+            display: flex;
+            flex-direction: column;
+            height: 260px;
+            min-height: 0;
+            margin: 10px 12px 0;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--panel);
+            box-shadow: 0 10px 26px rgba(23,32,51,.06);
+        }
+        textarea {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            padding: 16px;
+            font-size: 19px;
+            line-height: 1.55;
+            color: var(--ink);
+            caret-color: var(--accent);
+            background: #fff;
+        }
+        textarea::placeholder { color: #929aa5; }
+        .countline {
+            display: flex;
+            justify-content: flex-end;
+            padding: 7px 12px 9px;
+            font-size: 12px;
+            color: var(--muted);
+            border-top: 1px solid #eef1f4;
+            background: #fbfcfd;
+        }
+        .bottom-bar {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr 1fr;
+            gap: 10px;
+            padding: 10px 12px 0;
+            align-items: start;
+            align-self: start;
+        }
+        .clear-btn, .focus-btn, .send-btn {
+            width: 100%;
+            min-height: 44px;
+            height: 44px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 800;
+        }
+        .send-btn {
+            border: 1px solid #9bbef0;
+            background: #1769e0;
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(23,105,224,.18);
+        }
+        .focus-btn {
+            border: 1px solid #bed2ee;
+            background: #ffffff;
+            color: var(--accent-ink);
+            box-shadow: 0 5px 16px rgba(23,105,224,.08);
+        }
+        .clear-btn {
+            border: 1px solid #efc6c2;
+            background: #fff8f7;
+            color: var(--danger);
+        }
+        .focus-btn:active, .send-btn:active, .clear-btn:active, .set-btn:active, .close-btn:active { transform: translateY(1px); }
+        .modal { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: none; align-items: center; justify-content: center; z-index: 10; padding: 18px; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 340px; box-shadow: 0 22px 60px rgba(15,23,42,.24); }
+        .modal-content h3 { margin-bottom: 18px; font-size: 18px; color: var(--ink); }
+        .row { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 42px; color: #2c3441; border-bottom: 1px solid #eef1f4; }
+        .row:last-of-type { border-bottom: 0; margin-bottom: 16px; }
+        .row input[type=number] { width: 82px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; text-align: right; }
+        .row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
+        .close-btn { width: 100%; min-height: 44px; padding: 12px; background: var(--ink); color: white; border: none; border-radius: 8px; font-weight: 800; }
+        @media (max-height: 620px) {
+            .top { padding-top: 8px; }
+            .status-strip { margin-top: 7px; padding: 7px 9px; }
+            .paper { margin-top: 8px; height: 220px; }
+            textarea { font-size: 18px; padding: 13px; }
+            .clear-btn, .focus-btn, .send-btn { min-height: 40px; padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="top">
+        <div class="nav">
+            <div class="brand">
+                <div class="mark"></div>
+                <div class="title">
+                    <strong>InputBridge</strong>
+                    <div class="status-box">
+                        <div class="status-dot" id="dot"></div>
+                        <span class="status-text" id="st">未连接</span>
+                    </div>
+                </div>
+            </div>
+            <button class="set-btn" onclick="openM()">设置</button>
+        </div>
+        <div class="status-strip">
+            <span id="st_detail">增量同步已就绪</span>
+            <span id="count">0 字</span>
+        </div>
+    </header>
+    <div class="paper">
+        <textarea id="tx" placeholder="点这里输入或使用手机语音输入..." enterkeyhint="send" autofocus></textarea>
+        <div class="countline"><span id="count2">当前 0 字</span></div>
+    </div>
+    <div class="bottom-bar">
+        <button class="focus-btn" onclick="focusInput()">输入</button>
+        <button class="send-btn" onclick="submitEnter()">发送</button>
+        <button class="clear-btn" onclick="clearText(true)">清空</button>
+    </div>
+    <div class="modal" id="md">
+        <div class="modal-content">
+            <h3>同步设置</h3>
+            <div class="row"><span>发送延迟(ms)</span><input type="number" id="dly" value="200" min="0"></div>
+            <div class="row"><span>自动清空</span><input type="checkbox" id="auto_clr" {{autoClearChecked}}></div>
+            <div class="row"><span>智能感知重置</span><input type="checkbox" id="kb" {{smartChecked}}></div>
+            <button class="close-btn" onclick="closeM()">完成</button>
+        </div>
+    </div>
+    <script>
+        window.appVersion = "{{appVersion}}";
+        window.autoClearTime = Number("{{autoClearMs}}");
+        const tx = document.getElementById('tx'), st = document.getElementById('st'),
+              dot = document.getElementById('dot'), count = document.getElementById('count'),
+              st_detail = document.getElementById('st_detail'), count2 = document.getElementById('count2');
+        let ws, lastText = '', total = 0, ignoreLen = 0, timer, autoClearTimer, pendingEnterTimer;
+        let suppressBlurSubmitUntil = 0;
+        let lastViewportHeight = 0, minFocusedViewportHeight = 0, keyboardLikelyOpen = false, viewportSubmitTimer, keyboardPollTimer;
+        let lastUnidentifiedKeyAt = 0, lastEnterKeyAt = 0, enterLooksLikeNewline = false;
+        let enterMode = localStorage.getItem('InputBridge:enterMode') || 'send';
+
+        function currentViewportHeight(){
+            return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        }
+        function updateViewportHeight(){
+            const height = currentViewportHeight();
+            document.documentElement.style.setProperty('--app-height', `${Math.max(360, height)}px`);
+            detectKeyboardClose(height);
+        }
+        window.addEventListener('resize', updateViewportHeight);
+        window.visualViewport?.addEventListener('resize', updateViewportHeight);
+        window.visualViewport?.addEventListener('scroll', updateViewportHeight);
+        updateViewportHeight();
+
+        function openM(){ document.getElementById('md').style.display='flex'; }
+        function closeM(){ document.getElementById('md').style.display='none'; syncCfg(); }
+        function focusInput(){ tx.focus(); setTimeout(() => tx.scrollIntoView({block:'center'}), 80); }
+        function applyEnterMode(){
+            tx.setAttribute('enterkeyhint', enterMode === 'send' ? 'done' : 'enter');
+        }
+        function toggleEnterMode(){
+            enterMode = enterMode === 'send' ? 'newline' : 'send';
+            localStorage.setItem('InputBridge:enterMode', enterMode);
+            applyEnterMode();
+            focusInput();
+        }
+        function suppressBlurSubmit(){
+            suppressBlurSubmitUntil = Date.now() + 500;
+        }
+        function startKeyboardPolling(){
+            clearInterval(keyboardPollTimer);
+            minFocusedViewportHeight = currentViewportHeight();
+            lastViewportHeight = minFocusedViewportHeight;
+            keyboardLikelyOpen = false;
+            keyboardPollTimer = setInterval(() => detectKeyboardClose(currentViewportHeight()), 120);
+        }
+        function stopKeyboardPolling(){
+            clearInterval(keyboardPollTimer);
+            keyboardPollTimer = undefined;
+            minFocusedViewportHeight = 0;
+            keyboardLikelyOpen = false;
+        }
+        function detectKeyboardClose(height){
+            if(!lastViewportHeight){
+                lastViewportHeight = height;
+                minFocusedViewportHeight = height;
+                return;
+            }
+
+            const previousHeight = lastViewportHeight;
+            lastViewportHeight = height;
+            minFocusedViewportHeight = minFocusedViewportHeight
+                ? Math.min(minFocusedViewportHeight, height)
+                : height;
+
+            const shrank = previousHeight - height > 80;
+            const expanded = height - previousHeight > 80 || height - minFocusedViewportHeight > 100;
+            if(shrank){
+                keyboardLikelyOpen = true;
+                return;
+            }
+
+            if(!keyboardLikelyOpen || !expanded || enterMode !== 'send'){
+                return;
+            }
+
+            keyboardLikelyOpen = false;
+            clearTimeout(viewportSubmitTimer);
+            viewportSubmitTimer = setTimeout(() => {
+                if(enterMode !== 'send') return;
+                if(Date.now() < suppressBlurSubmitUntil) return;
+                submitEnter(false);
+            }, 120);
+        }
+        function syncCfg(){
+            if(ws?.readyState===1) ws.send(JSON.stringify({
+                type:'config',
+                detectKeyboard:document.getElementById('kb').checked
+            }));
+        }
+        function connect(){
+            ws = new WebSocket(`ws://${location.host}/ws`);
+            ws.onopen = () => { st.innerText='已连接'; dot.className='status-dot on'; syncCfg(); };
+            ws.onclose = () => { st.innerText='已断开'; dot.className='status-dot'; setTimeout(connect, 2000); };
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if(d.type==='rebase'){
+                    ignoreLen = tx.value.length;
+                    lastText = '';
+                    st_detail.innerText='本段已锁定';
+                    setTimeout(()=>st_detail.innerText='实时同步中', 1500);
+                } else if (d.type === 'config') {
+                    if(d.appVersion && d.appVersion !== window.appVersion){
+                        location.replace(`/?v=${encodeURIComponent(d.appVersion)}&t=${Date.now()}`);
+                        return;
+                    }
+                    document.getElementById('auto_clr').checked = d.autoClear;
+                    document.getElementById('kb').checked = d.smartDetection;
+                    window.autoClearTime = d.autoClearTime * 1000;
+                }
+            };
+        }
+        tx.onfocus = () => {
+            updateViewportHeight();
+            startKeyboardPolling();
+        };
+        function updateCounts(effective){
+            total += Math.max(0, effective.length - lastText.length);
+            count.innerText = `${total} 字`;
+            count2.innerText = `当前 ${effective.length} 字`;
+        }
+        function sendDiffNow(effective){
+            if(effective === lastText) return;
+            if(ws?.readyState===1){
+                ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective}));
+                updateCounts(effective);
+                lastText = effective;
+            }
+        }
+        function resetLocalInput(statusText){
+            tx.value=''; lastText=''; ignoreLen=0;
+            count.innerText = '0 字';
+            count2.innerText = '当前 0 字';
+            st_detail.innerText = statusText;
+            setTimeout(()=>st_detail.innerText='实时同步中', 1500);
+        }
+        function submitEnter(refocus = true){
+            clearTimeout(timer);
+            clearTimeout(pendingEnterTimer);
+            clearTimeout(viewportSubmitTimer);
+            keyboardLikelyOpen = false;
+            const effective = tx.value.substring(ignoreLen).replace(/[\r\n]+$/g, '');
+            sendDiffNow(effective);
+            if(ws?.readyState===1) {
+                ws.send(JSON.stringify({type:'enter'}));
+            }
+            resetLocalInput('已执行 Enter');
+            if(!refocus) stopKeyboardPolling();
+            if(refocus) focusInput();
+        }
+        function scheduleMaybeSubmitEnter(beforeValue){
+            clearTimeout(pendingEnterTimer);
+            pendingEnterTimer = setTimeout(() => {
+                if(enterMode !== 'send') return;
+                if(tx.value !== beforeValue) return;
+                submitEnter();
+            }, 120);
+        }
+        document.addEventListener('pointerdown', (e) => {
+            if(e.target.closest('button, input, .modal')){
+                suppressBlurSubmit();
+            }
+        }, true);
+        tx.addEventListener('beforeinput', (e) => {
+            if(e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph'){
+                clearTimeout(pendingEnterTimer);
+                if(enterMode === 'send' && lastEnterKeyAt && !enterLooksLikeNewline){
+                    e.preventDefault();
+                    submitEnter(false);
+                }
+            }
+        });
+        tx.addEventListener('keydown', (e) => {
+            if(e.key === 'Unidentified'){
+                lastUnidentifiedKeyAt = Date.now();
+            }
+            if(enterMode === 'send' && e.key === 'Enter' && !e.shiftKey){
+                lastEnterKeyAt = Date.now();
+                enterLooksLikeNewline = lastEnterKeyAt - lastUnidentifiedKeyAt < 350;
+                if(enterLooksLikeNewline){
+                    clearTimeout(pendingEnterTimer);
+                } else {
+                    scheduleMaybeSubmitEnter(tx.value);
+                }
+            }
+        });
+        tx.addEventListener('blur', () => {
+            if(enterMode !== 'send'){
+                stopKeyboardPolling();
+                return;
+            }
+            if(Date.now() < suppressBlurSubmitUntil){
+                stopKeyboardPolling();
+                return;
+            }
+            const beforeValue = tx.value;
+            setTimeout(() => {
+                if(enterMode !== 'send') return;
+                if(Date.now() < suppressBlurSubmitUntil) return;
+                if(tx.value !== beforeValue) return;
+                submitEnter(false);
+            }, 80);
+        });
+        tx.oninput = () => {
+            clearTimeout(timer);
+            const currentEffective = tx.value.substring(ignoreLen);
+            if(/[\r\n]/.test(currentEffective)){
+                clearTimeout(pendingEnterTimer);
+                if(enterMode === 'send' && lastEnterKeyAt && !enterLooksLikeNewline){
+                    tx.value = tx.value.replace(/[\r\n]+$/g, '');
+                    submitEnter(false);
+                    return;
+                }
+            }
+            timer = setTimeout(() => {
+                const effective = tx.value.substring(ignoreLen);
+                if(effective === lastText) return;
+                if(ws?.readyState===1){
+                    ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective}));
+                    updateCounts(effective);
+                    lastText = effective;
+                }
+            }, Number(document.getElementById('dly').value || 0));
+            clearTimeout(autoClearTimer);
+            if(document.getElementById('auto_clr').checked) {
+                autoClearTimer = setTimeout(() => {
+                    if(tx.value !== '') clearText(false);
+                }, window.autoClearTime);
+            }
+        };
+        function clearText(manual){
+            if(ws?.readyState===1) ws.send(JSON.stringify({type:'reset'}));
+            resetLocalInput(manual ? '已手动清空' : '已自动清空');
+            focusInput();
+        }
+        applyEnterMode();
+        connect();
+        setTimeout(focusInput, 300);
+    </script>
+</body>
+</html>

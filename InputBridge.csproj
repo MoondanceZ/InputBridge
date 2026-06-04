@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>InputBridge</AssemblyName>
+    <RootNamespace>InputBridge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0.3</Version>
+    <FileVersion>1.0.3.0</FileVersion>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <PublishSingleFile>true</PublishSingleFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <StripSymbols>false</StripSymbols>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\MobilePage.html" />
+  </ItemGroup>
+
+  <Target Name="KeepPublishDirectorySingleExe" AfterTargets="Publish">
+    <ItemGroup>
+      <FilesToRemoveAfterPublish Include="$(PublishDir)InputBridge.pdb" />
+      <FilesToRemoveAfterPublish Include="$(PublishDir)*.pdb" />
+      <FilesToRemoveAfterPublish Include="$(PublishDir)aspnetcorev2_inprocess.dll" />
+      <FoldersToRemoveAfterPublish Include="$(PublishDir)Assets" />
+    </ItemGroup>
+    <Delete Files="@(FilesToRemoveAfterPublish)" TreatErrorsAsWarnings="true" />
+    <RemoveDir Directories="@(FoldersToRemoveAfterPublish)" />
+  </Target>
+
+</Project>
