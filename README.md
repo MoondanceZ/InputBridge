@@ -37,8 +37,9 @@ dotnet publish -c Release
 ```text
 %APPDATA%\InputBridge\settings.json
 ```
-<img width="362" height="524" alt="image" src="https://github.com/user-attachments/assets/80010106-6790-442a-bdbd-f105deb3545f" />
+<img width="362" height="524" alt="QQ20260604-200348" src="https://github.com/user-attachments/assets/aca11971-96a6-436a-a8fa-88e0dec7ee5d" />
 <br>
-<img width="360" height="800" alt="66224a2f0be7fe7fd12ea58718cfa7e" src="https://github.com/user-attachments/assets/ba907fdb-16a0-4a86-b77c-772618ed25a2" />
+<br>
+<img width="362" height="664" alt="QQ20260604-200732" src="https://github.com/user-attachments/assets/0132300b-0b01-4e10-a830-dbf2f628beb9" />
 
 
