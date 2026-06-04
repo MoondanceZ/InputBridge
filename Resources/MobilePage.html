@@ -76,6 +76,7 @@
         .status-dot { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; flex: 0 0 auto; }
         .status-dot.on { background: var(--ok); box-shadow: 0 0 0 4px rgba(21,153,95,.12); }
         .status-text { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+        .version-text { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
         .set-btn {
             height: 34px;
             padding: 0 14px;
@@ -198,6 +199,7 @@
                     <div class="status-box">
                         <div class="status-dot" id="dot"></div>
                         <span class="status-text" id="st">未连接</span>
+                        <span class="version-text" id="ver">v{{appVersion}}</span>
                     </div>
                 </div>
             </div>

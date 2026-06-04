@@ -8,6 +8,7 @@ public partial class Form1 : Form
     private readonly Label _titleLabel = new();
     private readonly PictureBox _qrBox = new();
     private readonly LinkLabel _urlLabel = new();
+    private readonly Label _versionLabel = new();
     private readonly Label _statusLabel = new();
     private readonly Label _activityLabel = new();
     private readonly Button _settingsButton = new();
@@ -48,6 +49,13 @@ public partial class Form1 : Form
         _settingsButton.TabStop = false;
         _settingsButton.MouseClick += (_, _) => ShowSettingsDialog();
         Controls.Add(_settingsButton);
+
+        _versionLabel.Text = $"v{AppVersion.Current}";
+        _versionLabel.ForeColor = Color.Gray;
+        _versionLabel.Location = new Point(240, 18);
+        _versionLabel.Size = new Size(100, 30);
+        _versionLabel.TextAlign = ContentAlignment.MiddleRight;
+        Controls.Add(_versionLabel);
 
         _titleLabel.Text = "手机扫码立即连接";
         _titleLabel.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold);
