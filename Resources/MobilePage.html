@@ -211,7 +211,7 @@
         </div>
     </header>
     <div class="paper">
-        <textarea id="tx" placeholder="点这里输入或使用手机语音输入..." enterkeyhint="send" autofocus></textarea>
+        <textarea id="tx" placeholder="点这里输入或使用手机语音输入..." enterkeyhint="enter" autofocus></textarea>
         <div class="countline"><span id="count2">当前 0 字</span></div>
     </div>
     <div class="bottom-bar">
@@ -237,7 +237,6 @@
         let ws, lastText = '', total = 0, ignoreLen = 0, timer, autoClearTimer, pendingEnterTimer;
         let suppressBlurSubmitUntil = 0;
         let lastViewportHeight = 0, minFocusedViewportHeight = 0, keyboardLikelyOpen = false, viewportSubmitTimer, keyboardPollTimer;
-        let lastUnidentifiedKeyAt = 0, lastEnterKeyAt = 0, enterLooksLikeNewline = false;
         let enterMode = localStorage.getItem('InputBridge:enterMode') || 'send';
 
         function currentViewportHeight(){
@@ -257,7 +256,7 @@
         function closeM(){ document.getElementById('md').style.display='none'; syncCfg(); }
         function focusInput(){ tx.focus(); setTimeout(() => tx.scrollIntoView({block:'center'}), 80); }
         function applyEnterMode(){
-            tx.setAttribute('enterkeyhint', enterMode === 'send' ? 'done' : 'enter');
+            tx.setAttribute('enterkeyhint', 'enter');
         }
         function toggleEnterMode(){
             enterMode = enterMode === 'send' ? 'newline' : 'send';
@@ -379,14 +378,6 @@
             if(!refocus) stopKeyboardPolling();
             if(refocus) focusInput();
         }
-        function scheduleMaybeSubmitEnter(beforeValue){
-            clearTimeout(pendingEnterTimer);
-            pendingEnterTimer = setTimeout(() => {
-                if(enterMode !== 'send') return;
-                if(tx.value !== beforeValue) return;
-                submitEnter();
-            }, 120);
-        }
         document.addEventListener('pointerdown', (e) => {
             if(e.target.closest('button, input, .modal')){
                 suppressBlurSubmit();
@@ -395,24 +386,11 @@
         tx.addEventListener('beforeinput', (e) => {
             if(e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph'){
                 clearTimeout(pendingEnterTimer);
-                if(enterMode === 'send' && lastEnterKeyAt && !enterLooksLikeNewline){
-                    e.preventDefault();
-                    submitEnter(false);
-                }
             }
         });
         tx.addEventListener('keydown', (e) => {
-            if(e.key === 'Unidentified'){
-                lastUnidentifiedKeyAt = Date.now();
-            }
             if(enterMode === 'send' && e.key === 'Enter' && !e.shiftKey){
-                lastEnterKeyAt = Date.now();
-                enterLooksLikeNewline = lastEnterKeyAt - lastUnidentifiedKeyAt < 350;
-                if(enterLooksLikeNewline){
-                    clearTimeout(pendingEnterTimer);
-                } else {
-                    scheduleMaybeSubmitEnter(tx.value);
-                }
+                clearTimeout(pendingEnterTimer);
             }
         });
         tx.addEventListener('blur', () => {
@@ -437,11 +415,6 @@
             const currentEffective = tx.value.substring(ignoreLen);
             if(/[\r\n]/.test(currentEffective)){
                 clearTimeout(pendingEnterTimer);
-                if(enterMode === 'send' && lastEnterKeyAt && !enterLooksLikeNewline){
-                    tx.value = tx.value.replace(/[\r\n]+$/g, '');
-                    submitEnter(false);
-                    return;
-                }
             }
             timer = setTimeout(() => {
                 const effective = tx.value.substring(ignoreLen);
