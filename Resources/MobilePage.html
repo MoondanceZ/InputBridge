@@ -224,7 +224,8 @@
         const tx = document.getElementById('tx'), st = document.getElementById('st'),
               dot = document.getElementById('dot'), count = document.getElementById('count'),
               st_detail = document.getElementById('st_detail'), count2 = document.getElementById('count2');
-        let ws, lastText = '', total = 0, ignoreLen = 0, timer, autoClearTimer, pendingEnterTimer;
+        let ws, lastText = '', total = 0, ignoreLen = 0, ignoredPrefixText = '', timer, autoClearTimer, pendingEnterTimer;
+        let inputVersion = 0;
         let suppressBlurSubmitUntil = 0;
         let lastViewportHeight = 0, minFocusedViewportHeight = 0, keyboardLikelyOpen = false, viewportSubmitTimer, keyboardPollTimer;
         let enterMode = localStorage.getItem('InputBridge:enterMode') || 'send';
@@ -310,15 +311,13 @@
         }
         function connect(){
             ws = new WebSocket(`ws://${location.host}/ws`);
-            ws.onopen = () => { st.innerText='已连接'; dot.className='status-dot on'; syncCfg(); };
+            ws.onopen = () => { inputVersion = 0; st.innerText='已连接'; dot.className='status-dot on'; syncCfg(); };
             ws.onclose = () => { st.innerText='已断开'; dot.className='status-dot'; setTimeout(connect, 2000); };
             ws.onmessage = (e) => {
                 const d = JSON.parse(e.data);
                 if(d.type==='rebase'){
-                    ignoreLen = tx.value.length;
-                    lastText = '';
-                    st_detail.innerText='本段已锁定';
-                    setTimeout(()=>st_detail.innerText='实时同步中', 1500);
+                    cancelPendingActions();
+                    softResetLocalInput('电脑端已发送，继续听写');
                 } else if (d.type === 'config') {
                     if(d.appVersion && d.appVersion !== window.appVersion){
                         location.replace(`/?v=${encodeURIComponent(d.appVersion)}&t=${Date.now()}`);
@@ -339,30 +338,52 @@
             count.innerText = `${total} 字`;
             count2.innerText = `当前 ${effective.length} 字`;
         }
+        function getEffectiveText(){
+            if(ignoredPrefixText && tx.value.startsWith(ignoredPrefixText)){
+                return tx.value.slice(ignoredPrefixText.length).replace(/^[\s\r\n，。、；：？！,.!?;:]+/, '');
+            }
+
+            return tx.value.substring(ignoreLen);
+        }
         function sendDiffNow(effective){
             if(effective === lastText) return;
             if(ws?.readyState===1){
-                ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective}));
+                ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective, inputVersion}));
                 updateCounts(effective);
                 lastText = effective;
             }
         }
+        function cancelPendingActions(){
+            clearTimeout(timer);
+            clearTimeout(autoClearTimer);
+            clearTimeout(pendingEnterTimer);
+            clearTimeout(viewportSubmitTimer);
+        }
         function resetLocalInput(statusText){
-            tx.value=''; lastText=''; ignoreLen=0;
+            inputVersion++;
+            tx.value=''; lastText=''; ignoreLen=0; ignoredPrefixText='';
+            count.innerText = '0 字';
+            count2.innerText = '当前 0 字';
+            st_detail.innerText = statusText;
+            setTimeout(()=>st_detail.innerText='实时同步中', 1500);
+        }
+        function softResetLocalInput(statusText){
+            inputVersion++;
+            ignoredPrefixText = tx.value;
+            ignoreLen = tx.value.length;
+            lastText = '';
             count.innerText = '0 字';
             count2.innerText = '当前 0 字';
             st_detail.innerText = statusText;
             setTimeout(()=>st_detail.innerText='实时同步中', 1500);
         }
         function submitEnter(refocus = true){
-            clearTimeout(timer);
-            clearTimeout(pendingEnterTimer);
-            clearTimeout(viewportSubmitTimer);
+            cancelPendingActions();
             keyboardLikelyOpen = false;
-            const effective = tx.value.substring(ignoreLen).replace(/[\r\n]+$/g, '');
+            const effective = getEffectiveText().replace(/[\r\n]+$/g, '');
             sendDiffNow(effective);
             if(ws?.readyState===1) {
-                ws.send(JSON.stringify({type:'enter'}));
+                ws.send(JSON.stringify({type:'enter', inputVersion}));
             }
             resetLocalInput('已执行 Enter');
             if(!refocus) stopKeyboardPolling();
@@ -402,15 +423,17 @@
         });
         tx.oninput = () => {
             clearTimeout(timer);
-            const currentEffective = tx.value.substring(ignoreLen);
+            const versionAtSchedule = inputVersion;
+            const currentEffective = getEffectiveText();
             if(/[\r\n]/.test(currentEffective)){
                 clearTimeout(pendingEnterTimer);
             }
             timer = setTimeout(() => {
-                const effective = tx.value.substring(ignoreLen);
+                if(versionAtSchedule !== inputVersion) return;
+                const effective = getEffectiveText();
                 if(effective === lastText) return;
                 if(ws?.readyState===1){
-                    ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective}));
+                    ws.send(JSON.stringify({type:'diff', oldText:lastText, newText:effective, inputVersion}));
                     updateCounts(effective);
                     lastText = effective;
                 }
@@ -418,12 +441,18 @@
             clearTimeout(autoClearTimer);
             if(document.getElementById('auto_clr').checked) {
                 autoClearTimer = setTimeout(() => {
-                    if(tx.value !== '') clearText(false);
+                    if(versionAtSchedule !== inputVersion) return;
+                    if(getEffectiveText() !== '') softClearText('已自动清空，继续听写');
                 }, window.autoClearTime);
             }
         };
+        function softClearText(statusText){
+            if(ws?.readyState===1) ws.send(JSON.stringify({type:'reset', inputVersion}));
+            softResetLocalInput(statusText);
+        }
         function clearText(manual){
-            if(ws?.readyState===1) ws.send(JSON.stringify({type:'reset'}));
+            cancelPendingActions();
+            if(ws?.readyState===1) ws.send(JSON.stringify({type:'reset', inputVersion}));
             resetLocalInput(manual ? '已手动清空' : '已自动清空');
             focusInput();
         }

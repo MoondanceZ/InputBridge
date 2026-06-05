@@ -103,6 +103,11 @@ public sealed class SyncServer : IDisposable
             _pendingStripPunctuation = true;
         }
 
+        foreach (var state in _clients.Values)
+        {
+            state.InputVersion++;
+        }
+
         Broadcast(new RebaseMessage("rebase"));
     }
 
@@ -169,6 +174,7 @@ public sealed class SyncServer : IDisposable
 
         if (type == "reset")
         {
+            AdvanceClientInputVersion(socket, root);
             lock (_stateLock)
             {
                 _syncedText = "";
@@ -181,6 +187,7 @@ public sealed class SyncServer : IDisposable
 
         if (type == "enter")
         {
+            AdvanceClientInputVersion(socket, root);
             lock (_stateLock)
             {
                 _syncedText = "";
@@ -193,6 +200,11 @@ public sealed class SyncServer : IDisposable
         }
 
         if (type != "diff")
+        {
+            return;
+        }
+
+        if (!IsCurrentClientInputVersion(socket, root))
         {
             return;
         }
@@ -280,6 +292,33 @@ public sealed class SyncServer : IDisposable
         }
 
         return (oldText.Length - common, newText[common..]);
+    }
+
+    private bool IsCurrentClientInputVersion(WebSocket socket, JsonElement root)
+    {
+        if (!root.TryGetProperty("inputVersion", out var versionElement)
+            || !versionElement.TryGetInt32(out var version)
+            || !_clients.TryGetValue(socket, out var state))
+        {
+            return true;
+        }
+
+        return version == state.InputVersion;
+    }
+
+    private void AdvanceClientInputVersion(WebSocket socket, JsonElement root)
+    {
+        if (!root.TryGetProperty("inputVersion", out var versionElement)
+            || !versionElement.TryGetInt32(out var version)
+            || !_clients.TryGetValue(socket, out var state))
+        {
+            return;
+        }
+
+        if (version >= state.InputVersion)
+        {
+            state.InputVersion = version + 1;
+        }
     }
 
     private void Broadcast(ConfigMessage payload)
@@ -395,6 +434,7 @@ public sealed class SyncServer : IDisposable
     {
         public string? Ip { get; init; }
         public bool DetectKeyboard { get; set; } = true;
+        public int InputVersion { get; set; }
     }
 }
 
