@@ -310,9 +310,10 @@ public sealed class SyncServer : IDisposable
                 {
                     await socket.SendAsync(data, WebSocketMessageType.Text, true, CancellationToken.None);
                 }
-                catch
+                catch (Exception ex)
                 {
                     _clients.TryRemove(socket, out _);
+                    AppExceptionHandler.Log("SyncServer.Broadcast", ex);
                 }
             });
         }

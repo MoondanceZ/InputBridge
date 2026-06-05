@@ -8,6 +8,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        AppExceptionHandler.Register();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

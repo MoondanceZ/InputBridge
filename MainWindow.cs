@@ -645,8 +645,8 @@ public sealed class MainWindow : Window
         InitializeInputWatcher();
         BuildTray();
 
-        _ = UpdateQrCodeAsync();
-        _ = UpdateWifiHintAsync();
+        _ = RunSafelyAsync(UpdateQrCodeAsync, "Startup.UpdateQrCode");
+        _ = RunSafelyAsync(UpdateWifiHintAsync, "Startup.UpdateWifiHint");
         await Task.CompletedTask;
     }
 
@@ -678,7 +678,7 @@ public sealed class MainWindow : Window
     private void RefreshConnectionInfo()
     {
         RefreshConnectionText();
-        _ = UpdateQrCodeAsync();
+        _ = RunSafelyAsync(UpdateQrCodeAsync, "RefreshConnectionInfo.UpdateQrCode");
     }
 
     private void RefreshConnectionText()
@@ -869,7 +869,9 @@ public sealed class MainWindow : Window
             SetSettingsReady();
         }
 
-        _ = ApplySettingsInBackgroundAsync(oldSettings, newSettings, endpointChanged);
+            _ = RunSafelyAsync(
+                () => ApplySettingsInBackgroundAsync(oldSettings, newSettings, endpointChanged),
+                "Settings.Apply");
     }
 
     private async Task ApplySettingsInBackgroundAsync(AppSettings oldSettings, AppSettings newSettings, bool endpointChanged)
@@ -924,6 +926,18 @@ public sealed class MainWindow : Window
                 _statusText.Foreground = Brush("#C13830");
                 _statusPill.Background = Brush("#FFF1F0");
             });
+        }
+    }
+
+    private static async Task RunSafelyAsync(Func<Task> action, string source)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            AppExceptionHandler.Log(source, ex);
         }
     }
 
