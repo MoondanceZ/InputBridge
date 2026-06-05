@@ -44,6 +44,7 @@ public sealed class MainWindow : Window
     private readonly AvaCheckBox _settingsSmartDetectionBox = new();
     private readonly TextBlock _settingsErrorText = new();
     private readonly TextBlock _settingsUrlText = new();
+    private AvaButton? _settingsSaveButton;
     private readonly TrayIcon _trayIcon = new();
     private readonly AvaBitmap _appIconBitmap;
     private readonly WindowIcon? _trayWindowIcon;
@@ -56,6 +57,7 @@ public sealed class MainWindow : Window
     private bool _exitStarted;
     private bool _watcherDisposed;
     private bool _trayDisposed;
+    private bool _settingsSaving;
 
     public MainWindow()
     {
@@ -337,7 +339,9 @@ public sealed class MainWindow : Window
 
     private AvaControl BuildSettingsOverlay()
     {
-        _settingsOverlay.IsVisible = false;
+        _settingsOverlay.IsVisible = true;
+        _settingsOverlay.Opacity = 0;
+        _settingsOverlay.IsHitTestVisible = false;
         _settingsOverlay.Background = OverlayBrush();
         _settingsOverlay.Child = BuildSettingsDrawer();
         Grid.SetRowSpan(_settingsOverlay, 2);
@@ -435,9 +439,9 @@ public sealed class MainWindow : Window
             Padding = new Thickness(18, 16),
             BoxShadow = new BoxShadows(new BoxShadow
             {
-                Blur = 24,
-                OffsetY = -8,
-                Color = AvaColor.FromArgb(34, 23, 38, 59)
+                Blur = 14,
+                OffsetY = -5,
+                Color = AvaColor.FromArgb(24, 23, 38, 59)
             })
         };
 
@@ -500,9 +504,9 @@ public sealed class MainWindow : Window
         Grid.SetColumn(cancel, 1);
         footer.Children.Add(cancel);
 
-        var save = SmallButton("保存", SaveSettingsFromDrawer, subtle: false);
-        Grid.SetColumn(save, 3);
-        footer.Children.Add(save);
+        _settingsSaveButton = SmallButton("保存", SaveSettingsFromDrawer, subtle: false);
+        Grid.SetColumn(_settingsSaveButton, 3);
+        footer.Children.Add(_settingsSaveButton);
         root.Children.Add(footer);
 
         drawer.Child = root;
@@ -616,6 +620,7 @@ public sealed class MainWindow : Window
                 _statusText.Foreground = Brush("#C13830");
                 _statusPill.Background = Brush("#FFF1F0");
             });
+            throw;
         }
     }
 
@@ -627,7 +632,16 @@ public sealed class MainWindow : Window
     private async Task InitializeAfterFirstPaintAsync()
     {
         RefreshConnectionText();
-        _ = Task.Run(StartServerAsync);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await StartServerAsync();
+            }
+            catch
+            {
+            }
+        });
         InitializeInputWatcher();
         BuildTray();
 
@@ -649,6 +663,18 @@ public sealed class MainWindow : Window
         RefreshConnectionInfo();
     }
 
+    private async Task RestartServerOnlyAsync()
+    {
+        if (_server != null)
+        {
+            await _server.StopAsync();
+            _server.Dispose();
+            _server = null;
+        }
+
+        await StartServerAsync();
+    }
+
     private void RefreshConnectionInfo()
     {
         RefreshConnectionText();
@@ -657,8 +683,31 @@ public sealed class MainWindow : Window
 
     private void RefreshConnectionText()
     {
-        _urlText.Text = _settings.Url;
-        _settingsUrlText.Text = $"当前地址：{_settings.Url}";
+        RefreshConnectionText(_settings.Url);
+    }
+
+    private void RefreshConnectionText(string url)
+    {
+        _urlText.Text = url;
+        _settingsUrlText.Text = $"当前地址：{url}";
+    }
+
+    private string BuildFastUrl(AppSettings settings)
+    {
+        var ip = (settings.Ip ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            try
+            {
+                ip = new Uri(_urlText.Text ?? "").Host;
+            }
+            catch
+            {
+                ip = "127.0.0.1";
+            }
+        }
+
+        return $"http://{ip}:{settings.Port}";
     }
 
     private async Task UpdateQrCodeAsync()
@@ -738,16 +787,32 @@ public sealed class MainWindow : Window
         _settingsSmartDetectionBox.IsChecked = _settings.SmartDetection;
         _settingsErrorText.Text = "";
         _settingsUrlText.Text = $"当前地址：{_settings.Url}";
-        _settingsOverlay.IsVisible = true;
+        SetSettingsDrawerOpen(true);
     }
 
     private void HideSettingsDrawer()
     {
-        _settingsOverlay.IsVisible = false;
+        if (_settingsSaving)
+        {
+            return;
+        }
+
+        SetSettingsDrawerOpen(false);
+    }
+
+    private void SetSettingsDrawerOpen(bool open)
+    {
+        _settingsOverlay.Opacity = open ? 1 : 0;
+        _settingsOverlay.IsHitTestVisible = open;
     }
 
     private void SaveSettingsFromDrawer()
     {
+        if (_settingsSaving)
+        {
+            return;
+        }
+
         if (!int.TryParse(_settingsPortBox.Text, out var port) || port is < 1 or > 65535)
         {
             _settingsErrorText.Text = "端口号必须是 1-65535";
@@ -766,8 +831,8 @@ public sealed class MainWindow : Window
             return;
         }
 
-        var oldPort = _settings.Port;
-        _settings = new AppSettings
+        var oldSettings = _settings;
+        var newSettings = new AppSettings
         {
             Ip = (_settingsIpBox.Text ?? "").Trim(),
             Port = port,
@@ -776,17 +841,117 @@ public sealed class MainWindow : Window
             AutoClearTime = autoClearTime,
             SmartDetection = _settingsSmartDetectionBox.IsChecked == true
         };
-        _settings.Save();
 
-        HideSettingsDrawer();
-        if (oldPort != _settings.Port)
+        var changed = oldSettings.Ip != newSettings.Ip
+            || oldSettings.Port != newSettings.Port
+            || oldSettings.BackspaceLimit != newSettings.BackspaceLimit
+            || oldSettings.AutoClear != newSettings.AutoClear
+            || oldSettings.AutoClearTime != newSettings.AutoClearTime
+            || oldSettings.SmartDetection != newSettings.SmartDetection;
+        if (!changed)
         {
-            _ = Task.Run(RestartServerAsync);
+            SetSettingsDrawerOpen(false);
             return;
         }
 
-        _server?.UpdateSettings(_settings);
-        RefreshConnectionInfo();
+        var endpointChanged = oldSettings.Port != newSettings.Port
+            || !string.Equals((oldSettings.Ip ?? "").Trim(), (newSettings.Ip ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+        _settings = newSettings;
+        RefreshConnectionText(BuildFastUrl(newSettings));
+        SetSettingsDrawerOpen(false);
+
+        if (endpointChanged)
+        {
+            ShowServiceRestarting();
+        }
+        else
+        {
+            SetSettingsReady();
+        }
+
+        _ = ApplySettingsInBackgroundAsync(oldSettings, newSettings, endpointChanged);
+    }
+
+    private async Task ApplySettingsInBackgroundAsync(AppSettings oldSettings, AppSettings newSettings, bool endpointChanged)
+    {
+        try
+        {
+            await Task.Run(newSettings.Save);
+            Dispatcher.UIThread.Post(RefreshConnectionInfo, DispatcherPriority.Background);
+
+            if (endpointChanged)
+            {
+                await Task.Run(RestartServerOnlyAsync);
+                Dispatcher.UIThread.Post(SetSettingsReady);
+                return;
+            }
+
+            _server?.UpdateSettings(newSettings);
+        }
+        catch (Exception ex)
+        {
+            _settings = oldSettings;
+            try
+            {
+                await Task.Run(oldSettings.Save);
+            }
+            catch
+            {
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                RefreshConnectionInfo();
+                _statusText.Text = $"保存失败：{ex.Message}";
+                _statusText.Foreground = Brush("#C13830");
+                _statusPill.Background = Brush("#FFF1F0");
+            });
+        }
+    }
+
+    private async Task RestartServerInBackgroundAsync()
+    {
+        try
+        {
+            await Task.Run(RestartServerOnlyAsync);
+            Dispatcher.UIThread.Post(SetSettingsReady);
+        }
+        catch (Exception ex)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                _statusText.Text = $"服务重启失败：{ex.Message}";
+                _statusText.Foreground = Brush("#C13830");
+                _statusPill.Background = Brush("#FFF1F0");
+            });
+        }
+    }
+
+    private void ShowServiceRestarting()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            _statusText.Text = "● 正在重启服务";
+            _statusText.Foreground = Brush("#B26B00");
+            _statusPill.Background = Brush("#FFF7E6");
+        });
+    }
+
+    private void SetSettingsReady()
+    {
+        UpdateStatus(false, null);
+    }
+
+    private void SetSettingsSaving(bool saving)
+    {
+        _settingsSaving = saving;
+        if (_settingsSaveButton == null)
+        {
+            return;
+        }
+
+        _settingsSaveButton.Content = saving ? "保存中" : "保存";
+        _settingsSaveButton.IsEnabled = !saving;
     }
 
     private void BuildTray()
@@ -846,7 +1011,7 @@ public sealed class MainWindow : Window
 
         Show();
         Activate();
-        _settingsOverlay.IsVisible = false;
+        SetSettingsDrawerOpen(false);
         _closeOverlay.IsVisible = true;
     }
 
@@ -866,7 +1031,7 @@ public sealed class MainWindow : Window
         _quitting = true;
         _allowClose = true;
         _closeOverlay.IsVisible = false;
-        _settingsOverlay.IsVisible = false;
+        SetSettingsDrawerOpen(false);
         Hide();
 
         await StopServicesForExitAsync();
@@ -943,7 +1108,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_settingsOverlay.IsVisible)
+        if (_settingsOverlay.IsHitTestVisible)
         {
             return;
         }
