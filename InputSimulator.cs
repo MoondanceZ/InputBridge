@@ -5,23 +5,15 @@ namespace InputBridge;
 public sealed class InputSimulator
 {
     private const uint INPUT_KEYBOARD = 1;
-    private const ushort VK_CONTROL = 0x11;
     private const ushort VK_SHIFT = 0x10;
-    private const ushort VK_V = 0x56;
     private const ushort VK_BACK = 0x08;
     private const ushort VK_RETURN = 0x0D;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_UNICODE = 0x0004;
 
-    private readonly SynchronizationContext _uiContext;
     private readonly object _sync = new();
 
     public bool IsTyping { get; private set; }
-
-    public InputSimulator(SynchronizationContext uiContext)
-    {
-        _uiContext = uiContext;
-    }
 
     public void TypeText(string text)
     {
@@ -35,10 +27,7 @@ public sealed class InputSimulator
             IsTyping = true;
             try
             {
-                if (!SendUnicodeText(text))
-                {
-                    PasteWithClipboardRestore(text);
-                }
+                SendUnicodeText(text);
             }
             finally
             {
@@ -81,43 +70,6 @@ public sealed class InputSimulator
         return SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>()) == 1;
     }
 
-    private void PasteWithClipboardRestore(string text)
-    {
-        IDataObject? previous = null;
-
-        InvokeOnUi(() =>
-        {
-            try { previous = Clipboard.GetDataObject(); }
-            catch { previous = null; }
-
-            Clipboard.SetText(text);
-        });
-
-        Thread.Sleep(60);
-        if (!SendKey(VK_CONTROL, false)
-            || !SendKey(VK_V, false)
-            || !SendKey(VK_V, true)
-            || !SendKey(VK_CONTROL, true))
-        {
-            InvokeOnUi(() => SendKeys.SendWait("^v"));
-        }
-        Thread.Sleep(160);
-
-        InvokeOnUi(() =>
-        {
-            try
-            {
-                if (previous != null)
-                {
-                    Clipboard.SetDataObject(previous, true);
-                }
-            }
-            catch
-            {
-            }
-        });
-    }
-
     public void SendBackspaces(int count, int limit)
     {
         var safeCount = Math.Min(Math.Max(count, 0), Math.Max(limit, 0));
@@ -133,10 +85,8 @@ public sealed class InputSimulator
             {
                 for (var i = 0; i < safeCount; i++)
                 {
-                    if (!SendKey(VK_BACK, false) || !SendKey(VK_BACK, true))
-                    {
-                        InvokeOnUi(() => SendKeys.SendWait("{BACKSPACE}"));
-                    }
+                    SendKey(VK_BACK, false);
+                    SendKey(VK_BACK, true);
                     Thread.Sleep(5);
                 }
             }
@@ -161,10 +111,8 @@ public sealed class InputSimulator
             {
                 for (var i = 0; i < count; i++)
                 {
-                    if (!SendKey(VK_RETURN, false) || !SendKey(VK_RETURN, true))
-                    {
-                        InvokeOnUi(() => SendKeys.SendWait("{ENTER}"));
-                    }
+                    SendKey(VK_RETURN, false);
+                    SendKey(VK_RETURN, true);
 
                     Thread.Sleep(5);
                 }
@@ -190,13 +138,10 @@ public sealed class InputSimulator
             {
                 for (var i = 0; i < count; i++)
                 {
-                    if (!SendKey(VK_SHIFT, false)
-                        || !SendKey(VK_RETURN, false)
-                        || !SendKey(VK_RETURN, true)
-                        || !SendKey(VK_SHIFT, true))
-                    {
-                        InvokeOnUi(() => SendKeys.SendWait("+{ENTER}"));
-                    }
+                    SendKey(VK_SHIFT, false);
+                    SendKey(VK_RETURN, false);
+                    SendKey(VK_RETURN, true);
+                    SendKey(VK_SHIFT, true);
 
                     Thread.Sleep(5);
                 }
@@ -205,29 +150,6 @@ public sealed class InputSimulator
             {
                 IsTyping = false;
             }
-        }
-    }
-
-    private void InvokeOnUi(Action action)
-    {
-        if (SynchronizationContext.Current == _uiContext)
-        {
-            action();
-            return;
-        }
-
-        Exception? exception = null;
-        using var done = new ManualResetEventSlim();
-        _uiContext.Post(_ =>
-        {
-            try { action(); }
-            catch (Exception ex) { exception = ex; }
-            finally { done.Set(); }
-        }, null);
-        done.Wait();
-        if (exception != null)
-        {
-            throw exception;
         }
     }
 

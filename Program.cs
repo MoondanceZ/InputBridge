@@ -1,16 +1,26 @@
+using Avalonia;
+using Avalonia.Win32;
+
 namespace InputBridge;
 
 static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        ApplicationConfiguration.Initialize();
-        Application.Run(new Form1());
-    }    
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    public static AppBuilder BuildAvaloniaApp() =>
+        AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .With(new Win32PlatformOptions
+            {
+                CompositionMode =
+                [
+                    Win32CompositionMode.WinUIComposition,
+                    Win32CompositionMode.DirectComposition
+                ]
+            })
+            .LogToTrace();
 }

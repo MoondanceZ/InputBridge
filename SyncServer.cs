@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Net;
+using System.Reflection;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -12,7 +14,7 @@ namespace InputBridge;
 public sealed class SyncServer : IDisposable
 {
     private readonly InputSimulator _input;
-    private readonly Action<bool> _connectionChanged;
+    private readonly Action<bool, string?> _connectionChanged;
     private readonly Action<string>? _syncActivity;
     private readonly ConcurrentDictionary<WebSocket, ClientState> _clients = new();
     private readonly object _stateLock = new();
@@ -23,7 +25,7 @@ public sealed class SyncServer : IDisposable
     private bool _rebaseTriggered;
     private bool _pendingStripPunctuation;
 
-    public SyncServer(AppSettings settings, InputSimulator input, Action<bool> connectionChanged, Action<string>? syncActivity = null)
+    public SyncServer(AppSettings settings, InputSimulator input, Action<bool, string?> connectionChanged, Action<string>? syncActivity = null)
     {
         _settings = settings;
         _input = input;
@@ -45,24 +47,35 @@ public sealed class SyncServer : IDisposable
             context.Response.Headers.Expires = "0";
             return Results.Content(MobilePage.Render(_settings), "text/html; charset=utf-8");
         });
+        _app.MapGet("/assets/app.ico", () => Results.File(ReadAppIcon(), "image/x-icon"));
         _app.Map("/ws", HandleWebSocketAsync);
-        await _app.StartAsync(_cts.Token);
+        await _app.StartAsync(_cts.Token).ConfigureAwait(false);
     }
 
-    public async Task StopAsync()
+    public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_app != null)
-        {
-            await _app.StopAsync();
-            await _app.DisposeAsync();
-            _app = null;
-        }
+        var app = _app;
+        _app = null;
 
         _cts?.Cancel();
+        AbortClients();
+
+        if (app != null)
+        {
+            try
+            {
+                await app.StopAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await app.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
         _cts?.Dispose();
         _cts = null;
         _clients.Clear();
-        _connectionChanged(false);
+        _connectionChanged(false, null);
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -113,8 +126,9 @@ public sealed class SyncServer : IDisposable
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        _clients.TryAdd(socket, new ClientState());
-        _connectionChanged(true);
+        var clientIp = FormatClientIp(context.Connection.RemoteIpAddress);
+        _clients.TryAdd(socket, new ClientState { Ip = clientIp });
+        _connectionChanged(true, clientIp);
         BroadcastConfig();
 
         try
@@ -134,7 +148,7 @@ public sealed class SyncServer : IDisposable
         finally
         {
             _clients.TryRemove(socket, out _);
-            _connectionChanged(!_clients.IsEmpty);
+            _connectionChanged(!_clients.IsEmpty, GetActiveClientIp());
         }
     }
 
@@ -161,6 +175,7 @@ public sealed class SyncServer : IDisposable
                 _pendingStripPunctuation = true;
                 _rebaseTriggered = false;
             }
+            _syncActivity?.Invoke("");
             return;
         }
 
@@ -174,7 +189,6 @@ public sealed class SyncServer : IDisposable
             }
 
             _input.SendEnters(1);
-            _syncActivity?.Invoke("Enter");
             return;
         }
 
@@ -323,13 +337,62 @@ public sealed class SyncServer : IDisposable
         }
     }
 
+    private void AbortClients()
+    {
+        foreach (var socket in _clients.Keys.ToArray())
+        {
+            try
+            {
+                socket.Abort();
+            }
+            catch
+            {
+            }
+
+            _clients.TryRemove(socket, out _);
+        }
+    }
+
+    private string? GetActiveClientIp()
+    {
+        return _clients.Values
+            .Select(c => c.Ip)
+            .FirstOrDefault(ip => !string.IsNullOrWhiteSpace(ip));
+    }
+
+    private static string? FormatClientIp(IPAddress? address)
+    {
+        if (address == null)
+        {
+            return null;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return address.MapToIPv4().ToString();
+        }
+
+        return address.ToString();
+    }
+
+    private static byte[] ReadAppIcon()
+    {
+        using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("InputBridge.Assets.app.ico")
+            ?? throw new InvalidOperationException("Missing embedded app icon.");
+        using var buffer = new MemoryStream();
+        resource.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
     public void Dispose()
     {
-        StopAsync().GetAwaiter().GetResult();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        StopAsync(cts.Token).GetAwaiter().GetResult();
     }
 
     private sealed class ClientState
     {
+        public string? Ip { get; init; }
         public bool DetectKeyboard { get; set; } = true;
     }
 }

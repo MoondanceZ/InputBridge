@@ -14,7 +14,7 @@ public sealed class AppSettings
     public int Port { get; set; } = 5505;
     public int BackspaceLimit { get; set; } = 100;
     public bool SmartDetection { get; set; } = true;
-    public bool AutoClear { get; set; }
+    public bool AutoClear { get; set; } = true;
     public int AutoClearTime { get; set; } = 15;
 
     public string EffectiveIp => string.IsNullOrWhiteSpace(Ip) ? GetPreferredLocalIp() : Ip.Trim();

@@ -1,0 +1,87 @@
+<Wix
+  xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+    Name="InputBridge"
+    Manufacturer="InputBridge"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="f8c48397-db66-4823-a452-37c288e659c6"
+    Scope="perMachine"
+    Codepage="65001">
+
+    <MajorUpgrade DowngradeErrorMessage="已安装更新版本的 InputBridge。" />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="AppIcon.ico" SourceFile="$(var.ProjectDir)\Assets\app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="INSTALLFOLDER">
+      <RegistrySearch
+        Id="PreviousInstallDirSearch"
+        Root="HKLM"
+        Key="Software\InputBridge"
+        Name="InstallDir"
+        Type="raw" />
+    </Property>
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\Installer\License.rtf" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="InputBridge">
+        <Component Id="InputBridgeExe" Guid="*">
+          <File
+            Id="InputBridgeExeFile"
+            Source="$(var.PublishDir)\InputBridge.exe"
+            KeyPath="yes" />
+          <Shortcut
+            Id="StartMenuShortcut"
+            Directory="ApplicationProgramsFolder"
+            Name="InputBridge"
+            Description="InputBridge 手机语音输入桥"
+            WorkingDirectory="INSTALLFOLDER"
+            Icon="AppIcon.ico"
+            Advertise="true" />
+          <RegistryValue
+            Root="HKLM"
+            Key="Software\InputBridge"
+            Name="InstallDir"
+            Type="string"
+            Value="[INSTALLFOLDER]" />
+        </Component>
+
+        <Component Id="AvaloniaAngleNative" Guid="*">
+          <File Source="$(var.PublishDir)\av_libglesv2.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="HarfBuzzNative" Guid="*">
+          <File Source="$(var.PublishDir)\libHarfBuzzSharp.dll" KeyPath="yes" />
+        </Component>
+
+        <Component Id="SkiaNative" Guid="*">
+          <File Source="$(var.PublishDir)\libSkiaSharp.dll" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="InputBridge">
+        <Component Id="ApplicationProgramsFolderComponent" Guid="a47b2e08-027c-4bac-9b61-4dd949101cf6">
+          <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+          <RegistryValue
+            Root="HKCU"
+            Key="Software\InputBridge"
+            Name="StartMenuFolder"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="InputBridge" Level="1">
+      <ComponentRef Id="InputBridgeExe" />
+      <ComponentRef Id="AvaloniaAngleNative" />
+      <ComponentRef Id="HarfBuzzNative" />
+      <ComponentRef Id="SkiaNative" />
+      <ComponentRef Id="ApplicationProgramsFolderComponent" />
+    </Feature>
+  </Package>
+</Wix>
