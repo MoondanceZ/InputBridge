@@ -80,9 +80,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-msi.ps1 -SkipPublish
 ```text
 %APPDATA%\InputBridge\settings.json
 ```
-<img width="362" height="524" alt="QQ20260604-200348" src="https://github.com/user-attachments/assets/aca11971-96a6-436a-a8fa-88e0dec7ee5d" />
+
+<img width="488" height="650" alt="image" src="https://github.com/user-attachments/assets/9cc5e0c1-9f4f-4ac1-8282-79960d12d662" />
 <br>
 <br>
-<img width="362" height="664" alt="QQ20260604-200732" src="https://github.com/user-attachments/assets/0132300b-0b01-4e10-a830-dbf2f628beb9" />
+<img width="488" height="1114" alt="732efad8754d0d9af6d0db7a9c949b6" src="https://github.com/user-attachments/assets/a6523cf7-3e0d-4786-afdc-9c753703dbf6" />
+
 
 
