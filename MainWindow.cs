@@ -42,6 +42,7 @@ public sealed class MainWindow : Window
     private readonly AvaTextBox _settingsAutoClearTimeBox = new();
     private readonly AvaCheckBox _settingsAutoClearBox = new();
     private readonly AvaCheckBox _settingsSmartDetectionBox = new();
+    private readonly AvaCheckBox _settingsStartupBox = new();
     private readonly TextBlock _settingsErrorText = new();
     private readonly TextBlock _settingsUrlText = new();
     private AvaButton? _settingsSaveButton;
@@ -49,6 +50,8 @@ public sealed class MainWindow : Window
     private readonly AvaBitmap _appIconBitmap;
     private readonly WindowIcon? _trayWindowIcon;
     private readonly InputSimulator _input;
+    private readonly StartupService _startupService = new();
+    private NativeMenuItem? _startupTrayItem;
     private GlobalInputWatcher? _watcher;
     private AppSettings _settings;
     private SyncServer? _server;
@@ -65,6 +68,7 @@ public sealed class MainWindow : Window
         _trayWindowIcon = LoadWindowIcon();
         _settings = AppSettings.Load();
         _input = new InputSimulator();
+        _settingsStartupBox.Click += (_, _) => ToggleStartup();
 
         BuildWindow();
         QueueStartupWork();
@@ -471,6 +475,9 @@ public sealed class MainWindow : Window
             BuildAutoClearRow(),
             SettingsToggleRow(_settingsSmartDetectionBox)
         ]));
+        form.Children.Add(SettingsSection("系统", [
+            SettingsToggleRow(_settingsStartupBox)
+        ]));
 
         var scroll = new ScrollViewer
         {
@@ -785,6 +792,8 @@ public sealed class MainWindow : Window
         _settingsAutoClearTimeBox.Text = _settings.AutoClearTime.ToString();
         _settingsSmartDetectionBox.Content = "智能感知电脑端输入后重置同步状态";
         _settingsSmartDetectionBox.IsChecked = _settings.SmartDetection;
+        _settingsStartupBox.Content = "开机自动启动 InputBridge";
+        _settingsStartupBox.IsChecked = _startupService.IsEnabled();
         _settingsErrorText.Text = "";
         _settingsUrlText.Text = $"当前地址：{_settings.Url}";
         SetSettingsDrawerOpen(true);
@@ -977,11 +986,18 @@ public sealed class MainWindow : Window
 
         _trayIcon.ToolTipText = "InputBridge";
         _trayIcon.Icon = _trayWindowIcon;
+        _startupTrayItem = new NativeMenuItem("开机启动")
+        {
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _startupService.IsEnabled()
+        };
+        _startupTrayItem.Click += (_, _) => Dispatcher.UIThread.Post(ToggleStartup);
         _trayIcon.Menu = new NativeMenu
         {
             Items =
             {
                 TrayMenuItem("显示窗口", RestoreWindow),
+                _startupTrayItem,
                 TrayMenuItem("退出", ConfirmAndCloseAsync)
             }
         };
@@ -994,6 +1010,23 @@ public sealed class MainWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+    }
+
+    private void ToggleStartup()
+    {
+        var enabled = !_startupService.IsEnabled();
+        _startupService.SetEnabled(enabled);
+        SyncStartupControls();
+    }
+
+    private void SyncStartupControls()
+    {
+        var enabled = _startupService.IsEnabled();
+        _settingsStartupBox.IsChecked = enabled;
+        if (_startupTrayItem != null)
+        {
+            _startupTrayItem.IsChecked = enabled;
+        }
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
