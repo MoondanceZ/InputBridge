@@ -701,19 +701,7 @@ public sealed class MainWindow : Window
 
     private string BuildFastUrl(AppSettings settings)
     {
-        var ip = (settings.Ip ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(ip))
-        {
-            try
-            {
-                ip = new Uri(_urlText.Text ?? "").Host;
-            }
-            catch
-            {
-                ip = "127.0.0.1";
-            }
-        }
-
+        var ip = AppSettings.ResolveEffectiveIp(settings.Ip);
         return $"http://{ip}:{settings.Port}";
     }
 

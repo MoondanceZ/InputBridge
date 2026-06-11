@@ -17,7 +17,7 @@ public sealed class AppSettings
     public bool AutoClear { get; set; } = true;
     public int AutoClearTime { get; set; } = 15;
 
-    public string EffectiveIp => string.IsNullOrWhiteSpace(Ip) ? GetPreferredLocalIp() : Ip.Trim();
+    public string EffectiveIp => ResolveEffectiveIp(Ip);
 
     public string Url => $"http://{EffectiveIp}:{Port}";
 
@@ -68,6 +68,12 @@ public sealed class AppSettings
             if (settings.Port == 5000)
             {
                 settings.Port = 5505;
+                settings.Save();
+            }
+
+            if (!string.IsNullOrWhiteSpace(settings.Ip) && !IsCurrentLocalIp(settings.Ip))
+            {
+                settings.Ip = "";
                 settings.Save();
             }
 
@@ -142,6 +148,23 @@ public sealed class AppSettings
             .ThenBy(x => x.Address)
             .Select(x => x.Address)
             .ToArray();
+    }
+
+    public static string ResolveEffectiveIp(string? configuredIp)
+    {
+        var ip = (configuredIp ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(ip) && IsCurrentLocalIp(ip))
+        {
+            return ip;
+        }
+
+        return GetPreferredLocalIp();
+    }
+
+    private static bool IsCurrentLocalIp(string ip)
+    {
+        return GetLocalIpCandidates().Any(candidate =>
+            string.Equals(candidate, ip.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     private static string GetPreferredLocalIp()
